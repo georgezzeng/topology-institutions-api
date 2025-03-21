@@ -129,14 +129,25 @@ def _update_institution_ror_id(session: Session, institution: Institution, ror_i
         session.execute(delete(InstitutionIdentifier)
             .where(InstitutionIdentifier.institution_id == institution.id)
             .where(InstitutionIdentifier.identifier_type_id == ror_id_type.id))
-    elif institution.has_id_of_type(ror_id_type):
-        # Update the ROR ID for the institution if it exists
-        existing_ror_id = [i for i in institution.identifiers if i.identifier_type.id == ror_id_type.id][0]
-        existing_ror_id.identifier = ror_id
-        session.add(existing_ror_id)
     else:
-        # create a new ROR ID for the institution
-        session.add(InstitutionIdentifier(ror_id_type, ror_id, institution.id))
+        existing_institution_with_ror_id = session.scalar(
+            select(InstitutionIdentifier)
+            .where(InstitutionIdentifier.identifier_type_id == ror_id_type.id)
+            .where(InstitutionIdentifier.identifier == ror_id)
+            .where(InstitutionIdentifier.institution_id != institution.id)
+        )
+
+        if existing_institution_with_ror_id:
+            raise HTTPException(400, f"Institution with ROR ID {ror_id} already exists")
+
+        if institution.has_id_of_type(ror_id_type):
+            # Update the ROR ID for the institution if it exists
+            existing_ror_id = [i for i in institution.identifiers if i.identifier_type.id == ror_id_type.id][0]
+            existing_ror_id.identifier = ror_id
+            session.add(existing_ror_id)
+        else:
+            # create a new ROR ID for the institution
+            session.add(InstitutionIdentifier(ror_id_type, ror_id, institution.id))
 
 def _update_institution_unit_id(session: Session, institution: Institution, unit_id: str):
     """ Handle updates to an institution's joined InstitutionIdentifier of type 'unitid'
